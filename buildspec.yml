@@ -1,0 +1,35 @@
+version: 0.2
+env:
+  exported-variables:
+    - APP_NAME
+    - APP_ENVIRONMENT
+    - APP_VERSION
+    - ARTIFACT_NAME
+phases:
+  install:
+    runtime-versions:
+      java: corretto11
+    commands:
+      - aws s3 cp s3://$BUCKET_NAME/artifacts/trader-core-spring-1.0.1.jar ./trader-core-spring-1.0.1.jar
+      - mvn install:install-file -Dfile=./trader-core-spring-1.0.1.jar -DgroupId=com.trader.core -DartifactId=trader-core-spring -Dversion=1.0.1 -Dpackaging=jar
+      - aws s3 cp s3://$BUCKET_NAME/artifacts/trader-core-security-1.0.1.jar ./trader-core-security-1.0.1.jar
+      - mvn install:install-file -Dfile=./trader-core-security-1.0.1.jar -DgroupId=com.trader.core -DartifactId=trader-core-security -Dversion=1.0.1 -Dpackaging=jar
+      - aws s3 cp s3://$BUCKET_NAME/artifacts/trader-core-db-oracle-1.0.2.jar ./trader-core-db-oracle-1.0.2.jar
+      - mvn install:install-file -Dfile=./trader-core-db-oracle-1.0.2.jar -DgroupId=com.trader.core -DartifactId=trader-core-db-oracle -Dversion=1.0.2 -Dpackaging=jar
+      - mvn package
+  pre_build:
+    commands:
+      - APP_NAME=$(mvn org.apache.maven.plugins:maven-help-plugin:3.1.0:evaluate -Dexpression=project.artifactId -q -DforceStdout)
+      - APP_VERSION=$(mvn org.apache.maven.plugins:maven-help-plugin:3.1.0:evaluate -Dexpression=project.version -q -DforceStdout)
+      - ARTIFACT_NAME=$APP_NAME-$APP_VERSION
+      - unzip dist/$ARTIFACT_NAME.jar -d dist
+      - rm -fr dist/$ARTIFACT_NAME.jar
+  build:
+    commands:
+      - aws s3 cp s3://$BUCKET_NAME/config/template.json ./template.json
+      - aws cloudformation package --template-file template.yml --s3-bucket $BUCKET_NAME --output-template-file outputtemplate.yml --kms-key-id $KMS_KEY_ID --s3-prefix $APP_NAME/Artifacts
+artifacts:
+  files:
+    - template.yml
+    - outputtemplate.yml
+    - template.json
